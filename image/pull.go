@@ -417,9 +417,18 @@ func applyLayerToDir(layerDir, dst string) error {
 			// Remove any existing entry at target.
 			if existing, err := os.Lstat(target); err == nil {
 				if existing.IsDir() {
-					return fmt.Errorf("refusing to replace directory with symlink: %s", target)
+					// mutate.Extract squashes layers newest-first: a newer layer's directory
+					// entry (e.g. /var/run/ from ko's tool layer) arrives before an older
+					// base layer's symlink (e.g. var/run -> ../run from wolfi/chainguard).
+					// Wolfi/chainguard intentionally uses this symlink for FHS compatibility,
+					// so replacing the directory tree with it is correct. The symlink target
+					// has already been validated to stay within the rootfs above.
+					if err := os.RemoveAll(target); err != nil {
+						return fmt.Errorf("remove %s before replacing with symlink: %w", target, err)
+					}
+				} else {
+					_ = os.Remove(target)
 				}
-				_ = os.Remove(target)
 			}
 			if err := os.Symlink(linkTarget, target); err != nil {
 				return fmt.Errorf("create symlink %s: %w", rel, err)
@@ -801,15 +810,13 @@ func extractSymlink(hdr *tar.Header, target, rootDir string) error {
 		}
 	}
 
-	// Check if the target is an existing directory -- refuse to replace
-	// directories with symlinks.
-	if info, err := os.Lstat(target); err == nil {
-		if info.IsDir() {
-			return fmt.Errorf("refusing to replace directory with symlink: %s", target)
-		}
-		_ = os.Remove(target)
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat symlink target %s: %w", target, err)
+	// Remove any existing entry at target. A directory may already exist here
+	// when ko (or similar tools) placed subdirectories under var/run before the
+	// wolfi/chainguard base layer's var/run -> ../run symlink is applied. The
+	// symlink target has already been validated to stay within the rootfs above.
+	// RemoveAll is a no-op if the path does not exist, so no pre-check is needed.
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("remove %s before replacing with symlink: %w", target, err)
 	}
 
 	if err := os.Symlink(linkTarget, target); err != nil {

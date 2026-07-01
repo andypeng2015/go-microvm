@@ -27,7 +27,7 @@ task clean                # Remove bin/, dist/, and coverage files
 
 Run a single test: `go test -v -race -run TestName ./path/to/package`
 
-macOS dev setup: `brew tap slp/krun && brew install libkrun libkrunfw` (see `docs/MACOS.md` for details)
+macOS dev setup: `brew tap slp/krun && brew trust slp/krun && brew install libkrun libkrunfw` (see `docs/MACOS.md` for details)
 
 ## Architecture
 

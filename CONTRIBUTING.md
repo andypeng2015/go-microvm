@@ -12,7 +12,7 @@ For CGO builds (runner binary), you also need libkrun headers:
 | Platform | Install |
 |----------|---------|
 | Fedora | `sudo dnf install libkrun-devel` |
-| macOS | `brew tap slp/krun && brew install libkrun libkrunfw` |
+| macOS | `brew tap slp/krun && brew trust slp/krun && brew install libkrun libkrunfw` |
 | Any Linux | `task build-runner` (uses builder container, no system libkrun needed) |
 
 ## Development Workflow

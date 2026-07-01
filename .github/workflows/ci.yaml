@@ -133,6 +133,7 @@ jobs:
       - name: Install libkrun
         run: |
           brew tap slp/krun
+          brew trust slp/krun
           brew install libkrun libkrunfw
 
       - name: Build and sign runner

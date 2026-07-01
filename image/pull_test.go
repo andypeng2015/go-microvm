@@ -750,21 +750,59 @@ func TestExtractSymlink_ReplacesExistingFile(t *testing.T) {
 	assert.Equal(t, "real content", string(data))
 }
 
-func TestExtractSymlink_RefusesToReplaceDirectory(t *testing.T) {
+func TestExtractSymlink_ReplacesDirectory(t *testing.T) {
 	t.Parallel()
 
 	dst := t.TempDir()
 
-	// Create a directory first, then attempt to replace it with a symlink.
+	// mutate.Extract squashes layers newest-first, so a tool layer's directory
+	// entry can arrive before the base layer's symlink at the same path (e.g.
+	// var/run -> ../run from wolfi/chainguard). The extractor must replace the
+	// directory -- including its contents -- with the symlink.
 	entries := []tarEntry{
 		{name: "mydir/", typeflag: tar.TypeDir, mode: 0o755},
+		{name: "mydir/inner.txt", typeflag: tar.TypeReg, mode: 0o644, content: "stale"},
+		{name: "somewhere", typeflag: tar.TypeReg, mode: 0o644, content: "real content"},
 		{name: "mydir", typeflag: tar.TypeSymlink, mode: 0o777, linkname: "somewhere"},
 	}
 	buf := createTarBuffer(t, entries)
 
 	err := extractTar(context.Background(), buf, dst)
+	require.NoError(t, err)
+
+	linkTarget, err := os.Readlink(filepath.Join(dst, "mydir"))
+	require.NoError(t, err)
+	assert.Equal(t, "somewhere", linkTarget)
+
+	// mydir now resolves through the symlink to the "somewhere" regular file,
+	// so looking up mydir/inner.txt fails outright -- the stale directory and
+	// its contents are gone.
+	_, err = os.Lstat(filepath.Join(dst, "mydir", "inner.txt"))
+	assert.Error(t, err)
+}
+
+func TestExtractSymlink_EscapeAttemptRefusedEvenOverDirectory(t *testing.T) {
+	t.Parallel()
+
+	dst := t.TempDir()
+
+	// A directory must not be removed unless the replacing symlink's target
+	// has already been validated to stay within the rootfs.
+	entries := []tarEntry{
+		{name: "mydir/", typeflag: tar.TypeDir, mode: 0o755},
+		{name: "mydir/inner.txt", typeflag: tar.TypeReg, mode: 0o644, content: "kept"},
+		{name: "mydir", typeflag: tar.TypeSymlink, mode: 0o777, linkname: "../../../../../../etc/passwd"},
+	}
+	buf := createTarBuffer(t, entries)
+
+	err := extractTar(context.Background(), buf, dst)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "refusing to replace directory with symlink")
+	assert.Contains(t, err.Error(), "points outside rootfs")
+
+	// The directory and its contents must survive the refused replacement.
+	data, err := os.ReadFile(filepath.Join(dst, "mydir", "inner.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "kept", string(data))
 }
 
 // ---------------------------------------------------------------------------

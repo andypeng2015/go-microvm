@@ -7,6 +7,7 @@ go 1.26.0
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
+	github.com/cenkalti/backoff/v7 v7.0.0
 	github.com/containers/gvisor-tap-vsock v0.8.9
 	github.com/creack/pty v1.1.24
 	github.com/elastic/go-seccomp-bpf v1.6.0

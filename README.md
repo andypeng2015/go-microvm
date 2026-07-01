@@ -91,7 +91,9 @@ sudo usermod -aG kvm $USER
 
 ```bash
 # Install libkrun via Homebrew
-brew install libkrun
+brew tap slp/krun
+brew trust slp/krun
+brew install libkrun libkrunfw
 
 # Or build from source:
 git clone https://github.com/containers/libkrun.git

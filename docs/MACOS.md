@@ -14,8 +14,14 @@ The easiest way to install libkrun on macOS is via Homebrew:
 
 ```bash
 brew tap slp/krun
+brew trust slp/krun
 brew install libkrun libkrunfw
 ```
+
+Homebrew 6.0+ requires third-party taps to be trusted before installing from
+them. `libkrun`/`libkrunfw` pull in other formulae from the same tap (e.g.
+`virglrenderer`) as dependencies, so trusting only the two top-level formulae
+by fully-qualified name is not enough -- the whole tap must be trusted.
 
 This installs the libraries and headers into Homebrew's prefix (`/opt/homebrew`
 on Apple Silicon, `/usr/local` on Intel). The CGO directives in go-microvm

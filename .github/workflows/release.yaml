@@ -87,6 +87,7 @@ jobs:
       - name: Install libkrun via Homebrew
         run: |
           brew tap slp/krun
+          brew trust slp/krun
           brew install libkrun libkrunfw
 
       - name: Build runner and copy libraries

@@ -317,7 +317,7 @@ tasks:
         echo "{{.TAG}}" > "${staging}/VERSION"
         cat > "${staging}/LICENSE-GPL" <<'LICEOF'
         libkrunfw is licensed under the GNU General Public License v2.0 (GPL-2.0).
-        See https://github.com/containers/libkrunfw for full license text.
+        See https://github.com/libkrun/libkrunfw for full license text.
         LICEOF
         tar czf "dist/${staging}.tar.gz" "${staging}"
         rm -rf "${staging}"
@@ -353,10 +353,45 @@ tasks:
         echo "{{.TAG}}" > "${staging}/VERSION"
         cat > "${staging}/LICENSE-GPL" <<'LICEOF'
         libkrunfw is licensed under the GNU General Public License v2.0 (GPL-2.0).
-        See https://github.com/containers/libkrunfw for full license text.
+        See https://github.com/libkrun/libkrunfw for full license text.
         LICEOF
         tar czf "dist/${staging}.tar.gz" "${staging}"
         rm -rf "${staging}"
+
+  # =============================================================================
+  # Vendor Management
+  # =============================================================================
+
+  update-libkrun-header:
+    desc: Fetch libkrun.h from the pinned version and update the vendored copy
+    vars:
+      HEADER_VERSION: '{{.HEADER_VERSION | default .LIBKRUN_VERSION}}'
+    preconditions:
+      - sh: '[ -n "{{.HEADER_VERSION}}" ]'
+        msg: "HEADER_VERSION is empty — check that versions.env exists and contains LIBKRUN_VERSION"
+    cmds:
+      - >-
+        curl -fsSL
+        "https://raw.githubusercontent.com/libkrun/libkrun/{{.HEADER_VERSION}}/include/libkrun.h"
+        -o /tmp/libkrun-{{.HEADER_VERSION}}.h
+      - |
+        {
+          echo '// Vendored from /usr/include/libkrun.h'
+          echo '// SPDX-License-Identifier: Apache-2.0'
+          echo '// Copyright (c) 2021-2024 Red Hat, Inc.'
+          echo '//'
+          echo "// Synchronized from libkrun/libkrun@{{.HEADER_VERSION}} (include/libkrun.h)"
+          echo "// Run 'task update-libkrun-header' after bumping LIBKRUN_VERSION."
+          echo ''
+          cat /tmp/libkrun-{{.HEADER_VERSION}}.h
+        } > krun/libkrun.h
+      - rm -f /tmp/libkrun-{{.HEADER_VERSION}}.h
+      - cmd: git diff --stat krun/libkrun.h || true
+        ignore_error: true
+    sources:
+      - versions.env
+    generates:
+      - krun/libkrun.h
 
   # =============================================================================
   # Fetch Pre-built Artifacts

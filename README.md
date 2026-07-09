@@ -31,7 +31,7 @@
 go-microvm is a Go library and runner binary that turns any OCI container image
 into a lightweight virtual machine. It pulls the image, flattens its layers
 into a rootfs, configures in-process networking, and boots the result using
-[libkrun](https://github.com/containers/libkrun) -- all in a single function
+[libkrun](https://github.com/libkrun/libkrun) -- all in a single function
 call.
 
 You would use go-microvm when you need stronger isolation than containers provide
@@ -77,7 +77,7 @@ from source:
 sudo apt install build-essential libssl-dev pkg-config python3 patchelf
 
 # Clone and build libkrun
-git clone https://github.com/containers/libkrun.git
+git clone https://github.com/libkrun/libkrun.git
 cd libkrun
 make
 sudo make install
@@ -96,7 +96,7 @@ brew trust slp/krun
 brew install libkrun libkrunfw
 
 # Or build from source:
-git clone https://github.com/containers/libkrun.git
+git clone https://github.com/libkrun/libkrun.git
 cd libkrun
 make
 sudo make install

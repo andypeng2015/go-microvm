@@ -28,13 +28,13 @@ RUN dnf install -y \
 RUN mkdir -p /opt/libkrun-built/pkgconfig
 
 # Build libkrunfw (compiles a Linux kernel -- this takes a while)
-RUN git clone --depth 1 --branch "${LIBKRUNFW_VERSION}" https://github.com/containers/libkrunfw /opt/libkrunfw \
+RUN git clone --depth 1 --branch "${LIBKRUNFW_VERSION}" https://github.com/libkrun/libkrunfw /opt/libkrunfw \
     && cd /opt/libkrunfw \
     && make \
     && cp /opt/libkrunfw/libkrunfw.so.5.* /opt/libkrun-built/libkrunfw.so.5
 
 # Build libkrun (Rust project, built via Makefile with cargo)
-RUN git clone --depth 1 --branch "${LIBKRUN_VERSION}" https://github.com/containers/libkrun /opt/libkrun \
+RUN git clone --depth 1 --branch "${LIBKRUN_VERSION}" https://github.com/libkrun/libkrun /opt/libkrun \
     && cd /opt/libkrun \
     && make BLK=1 NET=1 \
     && cp /opt/libkrun/target/release/libkrun.so.1.* /opt/libkrun-built/libkrun.so.1 \

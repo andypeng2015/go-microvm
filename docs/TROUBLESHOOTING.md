@@ -108,5 +108,5 @@ libkrunfw bundles a Linux kernel compiled with the `kvm` guest patches.
 The kernel is licensed under GPL-2.0-only. If you distribute a binary
 that embeds libkrunfw, you must provide the corresponding kernel source
 (or a written offer to provide it). See the
-[libkrunfw repository](https://github.com/containers/libkrunfw) for
+[libkrunfw repository](https://github.com/libkrun/libkrunfw) for
 source availability.

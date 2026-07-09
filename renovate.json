@@ -2,5 +2,27 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$", "^images/builder/Containerfile$"],
+      "matchStrings": [
+        "LIBKRUN_VERSION=(?<currentValue>v?\\d+\\.\\d+\\.\\d+)",
+        "ARG LIBKRUN_VERSION=(?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "libkrun/libkrun",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$", "^images/builder/Containerfile$"],
+      "matchStrings": [
+        "LIBKRUNFW_VERSION=(?<currentValue>v?\\d+\\.\\d+\\.\\d+)",
+        "ARG LIBKRUNFW_VERSION=(?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "libkrun/libkrunfw",
+      "datasourceTemplate": "github-releases"
+    }
   ]
 }

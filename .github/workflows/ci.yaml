@@ -91,9 +91,18 @@ jobs:
   build-cgo-linux:
     name: Build (Linux CGO)
     runs-on: ubuntu-latest
+    env:
+      # Force docker so the manifest check, local build, and build-runner
+      # all use the same container storage. GitHub runners have docker.
+      CONTAINER_RUNTIME: docker
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Source versions.env
+        run: |
+          source versions.env
+          echo "LIBKRUN_VERSION=${LIBKRUN_VERSION}" >> "$GITHUB_ENV"
 
       - name: Set up Task
         uses: arduino/setup-task@v3.0.0
@@ -107,6 +116,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The builder image is tagged by LIBKRUN_VERSION. When a PR bumps
+      # LIBKRUN_VERSION, the image for that tag doesn't exist yet (it's
+      # built by builder.yaml only after merge to main). Check the registry
+      # and build locally if missing so CI can verify the bump.
+      - name: Check if builder image exists
+        id: check-builder
+        run: |
+          if docker manifest inspect ghcr.io/stacklok/go-microvm-builder:${LIBKRUN_VERSION} >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build builder image locally
+        if: steps.check-builder.outputs.exists == 'false'
+        run: task builder-image-build
 
       - name: Build runner using builder container
         run: task build-runner

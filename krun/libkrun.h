@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2021-2024 Red Hat, Inc.
 //
-// Synchronized from libkrun/libkrun@v1.18.0 (include/libkrun.h)
+// Synchronized from libkrun/libkrun@v1.19.4 (include/libkrun.h)
 // Run 'task update-libkrun-header' after bumping LIBKRUN_VERSION.
 
 #ifndef _LIBKRUN_H
@@ -290,6 +290,21 @@ int32_t krun_add_disk2(uint32_t ctx_id,
                        bool direct_io,
                        uint32_t sync_mode);
 
+/* Supported virtio-fs permission semantics */
+
+/**
+ * Be as close as possible to the common semantics of Linux file systems.
+ */
+#define KRUN_SEMANTICS_LINUX_COMPLETE 0
+/**
+ * As KRUN_SEMANTICS_LINUX_COMPLETE, with the following simplifications:
+ *  - Idmaps are not supported.
+ *  - Ownership bits are ignored, always returning the uid/gid from the process
+ *    requesting the operation within the guest (obtained from `Context`).
+ *  - Permissions bits are stored in the host, not as extended attributes.
+ */
+#define KRUN_SEMANTICS_LINUX_SIMPLIFIED 1
+
 /**
  * NO LONGER SUPPORTED. DO NOT USE.
  *
@@ -358,6 +373,25 @@ int32_t krun_add_virtiofs3(uint32_t ctx_id,
                            const char *c_path,
                            uint64_t shm_size,
                            bool read_only);
+
+/**
+ * Adds an independent virtio-fs device pointing to a host's directory with a
+ * tag. This variant allows specifying the permission semantics to be emulated.
+ *
+ * Arguments:
+ *  "ctx_id"         - the configuration context ID.
+ *  "c_tag"          - tag to identify the filesystem in the guest.
+ *  "c_path"         - full path to the directory in the host to be exposed to the guest.
+ *  "shm_size"       - size of the DAX SHM window in bytes.
+ *  "read_only"      - if true, the filesystem will be exposed as read-only to the guest.
+ *  "semantics"      - the permissions semantics to be emulated.
+ *
+ * Returns:
+ *  Zero on success or a negative error number on failure.
+ */
+int32_t krun_add_virtiofs4(uint32_t ctx_id, const char *c_tag,
+                           const char *c_path, uint64_t shm_size,
+                           bool read_only, uint32_t semantics);
 
 /* Send the VFKIT magic after establishing the connection,
    as required by gvproxy in vfkit mode. */
@@ -1020,6 +1054,7 @@ int32_t krun_check_nested_virt(void);
 #define KRUN_FEATURE_INTEL_TDX 8
 #define KRUN_FEATURE_AWS_NITRO 9
 #define KRUN_FEATURE_VIRGL_RESOURCE_MAP2 10
+#define KRUN_FEATURE_INIT_BLOB 11
 
 /**
  * Checks if a specific feature was enabled at build time.
@@ -1058,6 +1093,13 @@ int32_t krun_get_max_vcpus(void);
 int32_t krun_split_irqchip(uint32_t ctx_id, bool enable);
 
 /*
+ * NOTE: Implicit resource creation is a legacy convenience. The 2.0 API
+ * (see https://github.com/containers/libkrun/issues/634) will not create
+ * any implicit resources. Callers should start using the
+ * krun_disable_implicit_* functions now to ease migration.
+ */
+
+/*
  * Do not create an implicit console device in the guest. By using this API,
  * libkrun will create zero console devices on behalf of the user. Any
  * console devices needed by the user must be added manually via other API
@@ -1070,6 +1112,98 @@ int32_t krun_split_irqchip(uint32_t ctx_id, bool enable);
  *  Zero on success or a negative error number on failure.
  */
 int32_t krun_disable_implicit_console(uint32_t ctx_id);
+
+/**
+ * Do not inject the default init binary (/init.krun) into the root
+ * filesystem. Must be called before krun_set_root().
+ *
+ * No-op when libkrun is built without the "init-blob" feature (there is no
+ * implicit init to disable).
+ *
+ * Arguments:
+ *  "ctx_id" - the configuration context ID.
+ *
+ * Returns:
+ *  Zero on success or a negative error number on failure.
+ */
+int32_t krun_disable_implicit_init(uint32_t ctx_id);
+
+/**
+ * Get a pointer to the built-in default init binary.
+ *
+ * This is the same binary that libkrun injects as /init.krun by default.
+ * Callers that use krun_disable_implicit_init() can use this to inject the
+ * init binary themselves (e.g. via krun_fs_add_overlay_file with custom
+ * settings).
+ *
+ * The returned pointer is valid for the lifetime of the process (static data).
+ *
+ * Arguments:
+ *  "data_out" - receives a pointer to the init binary bytes.
+ *  "len_out"  - receives the length in bytes.
+ *
+ * Returns:
+ *  Zero on success or a negative error number on failure.
+ *  -EINVAL   - data_out or len_out is NULL
+ *  -ENOTSUP  - libkrun was built without the "init-blob" feature
+ */
+int32_t krun_get_default_init(const uint8_t **data_out, size_t *len_out);
+
+/**
+ * Add a virtual overlay file to a virtiofs device.
+ *
+ * The file is backed entirely by host memory (no host file). The data
+ * pointer is NOT copied — the caller must keep the memory valid for the
+ * full VM lifetime.
+ *
+ * "path" may contain '/' to place the file inside a virtual directory
+ * previously created with krun_fs_add_overlay_dir (e.g. "etc/hostname").
+ * All intermediate directories must already exist; -ENOENT is returned
+ * if a component is missing, -ENOTDIR if a component is not a directory.
+ *
+ * Arguments:
+ *  "ctx_id"   - the configuration context ID.
+ *  "fs_tag"   - tag of the virtiofs device (e.g. "/dev/root").
+ *  "path"     - path of the file (e.g. "init.krun" or "etc/hostname").
+ *  "data"     - pointer to the file content.
+ *  "data_len" - length of the file content in bytes.
+ *  "mode"     - file mode bits (e.g. 0100644 for a regular file).
+ *  "one_shot" - if true, the file can only be looked up once.
+ *
+ * Returns:
+ *  Zero on success or a negative error number on failure.
+ *  -EINVAL  - invalid parameters (NULL pointer, empty path component)
+ *  -ENOENT  - context, fs_tag, or intermediate path component not found
+ *  -ENOTDIR - intermediate path component is not a directory
+ */
+int32_t krun_fs_add_overlay_file(uint32_t ctx_id, const char *fs_tag,
+                                 const char *path, const uint8_t *data,
+                                 size_t data_len, uint32_t mode, bool one_shot);
+
+/**
+ * Add a virtual overlay directory to a virtiofs device.
+ *
+ * The directory is empty and read-only, useful as a mount point.
+ *
+ * "path" may contain '/' to nest inside an existing virtual directory
+ * (e.g. "usr/lib"). All intermediate directories must already exist;
+ * -ENOENT is returned if a component is missing, -ENOTDIR if a component
+ * is not a directory.
+ *
+ * Arguments:
+ *  "ctx_id"   - the configuration context ID.
+ *  "fs_tag"   - tag of the virtiofs device (e.g. "/dev/root").
+ *  "path"     - path of the directory (e.g. "dev" or "usr/lib").
+ *  "mode"     - directory mode bits (e.g. 040755).
+ *
+ * Returns:
+ *  Zero on success or a negative error number on failure.
+ *  -EINVAL  - invalid parameters (NULL pointer, empty path component)
+ *  -ENOENT  - context, fs_tag, or intermediate path component not found
+ *  -ENOTDIR - intermediate path component is not a directory
+ */
+int32_t krun_fs_add_overlay_dir(uint32_t ctx_id, const char *fs_tag,
+                                const char *path, uint32_t mode);
 
 /**
  * Disable the implicit vsock device.

@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: Copyright 2025 Stacklok, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Update vendored libkrun.h
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "versions.env"
+
+permissions:
+  contents: write
+
+jobs:
+  sync-header:
+    name: Sync libkrun.h
+    runs-on: ubuntu-latest
+    # Only run for Renovate bumps to LIBKRUN_VERSION (not LIBKRUNFW-only
+    # bumps, which don't change the header).
+    if: github.actor == 'renovate[bot]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # Full history to detect what changed in versions.env
+          fetch-depth: 0
+
+      - name: Check if LIBKRUN_VERSION changed in this PR
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          if git diff "$base"..HEAD -- versions.env | grep -qE '^\-LIBKRUN_VERSION=|^\+LIBKRUN_VERSION='; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Source pinned version
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          source versions.env
+          echo "LIBKRUN_VERSION=${LIBKRUN_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Fetch and update vendored header
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          curl -fsSL \
+            "https://raw.githubusercontent.com/libkrun/libkrun/${LIBKRUN_VERSION}/include/libkrun.h" \
+            -o /tmp/libkrun.h
+          {
+            echo '// Vendored from /usr/include/libkrun.h'
+            echo '// SPDX-License-Identifier: Apache-2.0'
+            echo '// Copyright (c) 2021-2024 Red Hat, Inc.'
+            echo '//'
+            echo "// Synchronized from libkrun/libkrun@${LIBKRUN_VERSION} (include/libkrun.h)"
+            echo "// Run 'task update-libkrun-header' after bumping LIBKRUN_VERSION."
+            echo ''
+            cat /tmp/libkrun.h
+          } > krun/libkrun.h
+          rm -f /tmp/libkrun.h
+
+      - name: Verify header compiles
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          echo '#include "libkrun.h"
+          int main(void){return 0;}' > /tmp/test_header.c
+          gcc -fsyntax-only -I krun /tmp/test_header.c
+
+      - name: Commit updated header
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          git add krun/libkrun.h
+          # Only commit if there's something to commit
+          if git diff --cached --quiet; then
+            echo "Header already up to date — nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync vendored libkrun.h to ${LIBKRUN_VERSION}"
+          git push
